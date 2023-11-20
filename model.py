@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
 
 def load_dataset(batch_size: int=64):
     """Loading cifar10 dataset and creating dataloaders for both training and testing of models."""
@@ -42,11 +43,6 @@ class CNNModel(nn.Module):
         self.conv2 = nn.Conv2d(in_channels=6,
                                out_channels=16,
                                kernel_size=5)
-        # self.conv3 = nn.Conv2d(in_channels=64,
-        #                        out_channels=256,
-        #                        kernel_size=3,
-        #                        stride=1,
-        #                        padding=1)
         self.max_pool = nn.MaxPool2d(2, 2)
         self.relu = nn.ReLU()
 
@@ -81,29 +77,46 @@ class CNNModel(nn.Module):
         return x
         
 def train_model(model, train_loader, criterion, optimizer, epochs=5):
+    train_losses = []
     for epoch in range(epochs):
+        loss = 0.0
         for images, labels in train_loader:
             optimizer.zero_grad()
             outputs = model(images)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-        print(f'Epochs[{epochs+1}/{epochs}]-Loss: {loss.item():.4f}')
+            train_losses.append(loss.item())
+        print(f'Epochs[{epoch+1}/{epochs}]-Loss: {loss.item():.4f}')
+    return train_losses
 
-def evaluate_model(model, test_loader):
+def evaluate_model(model, test_loader, criterion):
     model.eval()
     correct, total = 0., 0.
-
+    validation_losses = []
     with torch.no_grad():
+        val_loss = 0.0
         for images, labels in test_loader:
             outputs = model(images)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted==labels).sum().item()
+            val_loss += criterion(outputs, labels)
+            validation_losses.append(val_loss.item())
 
     accuracy = correct/total
 
     print(f'Test Accuracy: {accuracy*100}%.')
+    return validation_losses
+
+def plot_performance(train_losses, validation_losses):
+    plt.figure(figsize=(10, 10))
+    plt.plot(train_losses, label='Training Loss')
+    plt.plot(validation_losses, label='Validation Loss')
+    plt.legend()
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.show()
 
 def save_model(model, filename='cifar10_model.pth'):
     torch.save(model.state_dict(), filename)
@@ -115,8 +128,10 @@ def main():
     optimizer = optim.Adam(params=model.parameters(),
                            lr=1e-3)
     train_loader, test_loader = load_dataset()
-    train_model(model, train_loader, criterion, optimizer)
-    evaluate_model(model, test_loader)
+    training_loss = train_model(model, train_loader, criterion, optimizer)
+    save_model(model)
+    validation_loss = evaluate_model(model, test_loader, criterion)
+    plot_performance(training_loss, validation_loss)
 
 if __name__=='__main__':
     main()
